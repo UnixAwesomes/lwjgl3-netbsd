@@ -50,6 +50,7 @@ public final class CL {
         SharedLibrary CL;
         switch (Platform.get()) {
             case FREEBSD:
+            case NETBSD:
             case LINUX:
                 CL = Library.loadNative(CL.class, "org.lwjgl.opencl", Configuration.OPENCL_LIBRARY_NAME, "libOpenCL.so.1", "OpenCL");
                 break;

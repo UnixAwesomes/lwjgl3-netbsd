@@ -60,6 +60,7 @@ public final class ALC {
         String libName;
         switch (Platform.get()) {
             case FREEBSD:
+            case NETBSD:
             case LINUX:
             case MACOSX:
                 libName = "openal";

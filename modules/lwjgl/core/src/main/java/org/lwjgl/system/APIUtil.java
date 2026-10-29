@@ -7,6 +7,7 @@ package org.lwjgl.system;
 import org.jspecify.annotations.*;
 import org.lwjgl.*;
 import org.lwjgl.system.freebsd.*;
+import org.lwjgl.system.netbsd.*;
 import org.lwjgl.system.libffi.*;
 import org.lwjgl.system.linux.*;
 import org.lwjgl.system.macosx.*;
@@ -126,6 +127,8 @@ public final class APIUtil {
         switch (Platform.get()) {
             case FREEBSD:
                 return new FreeBSDLibrary(name);
+            case NETBSD:
+                return new NetBSDLibrary(name);
             case LINUX:
                 return new LinuxLibrary(name);
             case MACOSX:

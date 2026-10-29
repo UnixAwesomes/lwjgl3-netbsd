@@ -7,6 +7,9 @@
 #ifdef LWJGL_FREEBSD
     #include "FreeBSDConfig.h"
 #endif
+#ifdef LWJGL_NETBSD
+    #include "NetBSDConfig.h"
+#endif
 #ifdef LWJGL_LINUX
     #include "LinuxConfig.h"
 #endif

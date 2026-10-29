@@ -14,7 +14,7 @@
     #if !defined(_SC_LEVEL1_DCACHE_LINESIZE)
         #define _SC_LEVEL1_DCACHE_LINESIZE 190
     #endif
-#elif defined(LWJGL_MACOS) || defined(LWJGL_FREEBSD)
+#elif defined(LWJGL_MACOS) || defined(LWJGL_FREEBSD) || defined(LWJGL_NETBSD)
     #include <unistd.h>
     #include <sys/types.h>
     #include <sys/sysctl.h>
@@ -42,7 +42,7 @@
 #endif
 
 static int64_t queryPageSize(void) {
-#if defined(LWJGL_MACOS) || defined(LWJGL_FREEBSD)
+#if defined(LWJGL_MACOS) || defined(LWJGL_FREEBSD) || defined(LWJGL_NETBSD)
     return getpagesize();
 #elif defined(LWJGL_LINUX)
     return sysconf(_SC_PAGESIZE);
@@ -58,6 +58,9 @@ static int64_t queryPageSize(void) {
 static int64_t queryCacheLineSize(void) {
 #if defined(LWJGL_FREEBSD)
     return sysctlbyname_i64("machdep.cacheline_size");
+#elif defined(LWJGL_NETBSD)
+	return 64;
+
 #elif defined(LWJGL_LINUX)
     return sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
 #elif defined(LWJGL_MACOS)

@@ -28,33 +28,6 @@ import static org.lwjgl.system.windows.GDI32.*;
 import static org.lwjgl.system.windows.User32.*;
 import static org.lwjgl.system.windows.WindowsUtil.*;
 
-/**
- * This class must be used before any OpenGL function is called. It has the following responsibilities:
- * <ul>
- * <li>Loads the OpenGL native library into the JVM process.</li>
- * <li>Creates instances of {@link GLCapabilities} classes. A {@code GLCapabilities} instance contains flags for functionality that is available in an OpenGL
- * context. Internally, it also contains function pointers that are only valid in that specific OpenGL context.</li>
- * <li>Maintains thread-local state for {@code GLCapabilities} instances, corresponding to OpenGL contexts that are current in those threads.</li>
- * </ul>
- *
- * <h3>Library lifecycle</h3>
- * <p>The OpenGL library is loaded automatically when this class is initialized. Set the {@link Configuration#OPENGL_EXPLICIT_INIT} option to override this
- * behavior. Manual loading/unloading can be achieved with the {@link #create} and {@link #destroy} functions. The name of the library loaded can be overridden
- * with the {@link Configuration#OPENGL_LIBRARY_NAME} option. The maximum OpenGL version loaded can be set with the {@link Configuration#OPENGL_MAXVERSION}
- * option. This can be useful to ensure that no functionality above a specific version is used during development.</p>
- *
- * <h3>GLCapabilities creation</h3>
- * <p>Instances of {@code GLCapabilities} can be created with the {@link #createCapabilities} method. An OpenGL context must be current in the current thread
- * before it is called. Calling this method is expensive, so the {@code GLCapabilities} instance should be associated with the OpenGL context and reused as
- * necessary.</p>
- *
- * <h3>Thread-local state</h3>
- * <p>Before a function for a given OpenGL context can be called, the corresponding {@code GLCapabilities} instance must be passed to the
- * {@link #setCapabilities} method. The user is also responsible for clearing the current {@code GLCapabilities} instance when the context is destroyed or made
- * current in another thread.</p>
- *
- * <p>Note that the {@link #createCapabilities} method implicitly calls {@link #setCapabilities} with the newly created instance.</p>
- */
 public final class GL {
 
     private static final @Nullable APIVersion MAX_VERSION;
@@ -112,6 +85,25 @@ public final class GL {
             }
         }
 
+        // PATCH: on NetBSD, if native/EGL/OSMesa failed, use GLFW (via reflection) to provide OpenGL function addresses.
+        if (GL == null && Platform.get() == Platform.NETBSD) {
+            apiLog("[GL] NetBSD: falling back to GLFW for OpenGL context management");
+            try {
+                Class<?> glfwClass = Class.forName("org.lwjgl.glfw.GLFW");
+                java.lang.reflect.Method getProcAddress = glfwClass.getMethod("glfwGetProcAddress", CharSequence.class);
+                create(functionName -> {
+                    try {
+                        return (long)getProcAddress.invoke(null, functionName);
+                    } catch (Exception e) {
+                        return NULL;
+                    }
+                });
+                return;
+            } catch (Exception e) {
+                apiLog("[GL] NetBSD: GLFW reflection fallback failed: " + e.getMessage());
+            }
+        }
+
         if (GL == null) {
             throw new IllegalStateException("There is no OpenGL context management API available.");
         }
@@ -133,6 +125,17 @@ public final class GL {
 
     private static @Nullable SharedLibrary loadNative() {
         try {
+            // PATCH: on NetBSD, try libGL.so.3 / libGL.so.1 / libGL.so explicitly.
+            if (Platform.get() == Platform.NETBSD) {
+                String[] netbsdNames = {"libGL.so.3", "libGL.so.1", "libGL.so"};
+                for (String name : netbsdNames) {
+                    try {
+                        return Library.loadNative(GL.class, "org.lwjgl.opengl", name);
+                    } catch (Throwable ignored) {
+                        // try next
+                    }
+                }
+            }
             return Library.loadNative(GL.class, "org.lwjgl.opengl", Configuration.OPENGL_LIBRARY_NAME, Configuration.OPENGL_LIBRARY_NAME_DEFAULTS());
         } catch (Throwable ignored) {
             apiLog("[GL] Failed to initialize context management based on native OpenGL platform API");
@@ -177,6 +180,7 @@ public final class GL {
 
                     switch (Platform.get()) {
                         case FREEBSD:
+                        case NETBSD:
                         case LINUX:
                             GetProcAddress = library.getFunctionAddress("glXGetProcAddress");
                             if (GetProcAddress == NULL) {
@@ -606,11 +610,6 @@ public final class GL {
         }
     }
 
-    /**
-     * Creates a {@link WGLCapabilities} instance for the context that is current in the current thread.
-     *
-     * <p>This method may only be used on Windows.</p>
-     */
     public static WGLCapabilities createCapabilitiesWGL() {
         long hdc = wglGetCurrentDC();
         if (hdc == NULL) {
@@ -620,11 +619,6 @@ public final class GL {
         return createCapabilitiesWGL(hdc);
     }
 
-    /**
-     * Creates a {@link WGLCapabilities} instance for the specified device context.
-     *
-     * @param hdc the device context handle ({@code HDC})
-     */
     private static WGLCapabilities createCapabilitiesWGL(long hdc) {
         FunctionProvider functionProvider = GL.functionProvider;
         if (functionProvider == null) {
@@ -657,25 +651,10 @@ public final class GL {
         return new WGLCapabilities(functionProvider, supportedExtensions);
     }
 
-    /**
-     * Creates a {@link GLXCapabilities} instance for the default screen of the specified X connection.
-     *
-     * <p>This method may only be used on Linux.</p>
-     *
-     * @param display the X connection handle ({@code DISPLAY})
-     */
     public static GLXCapabilities createCapabilitiesGLX(long display) {
         return createCapabilitiesGLX(display, XDefaultScreen(display));
     }
 
-    /**
-     * Creates a {@link GLXCapabilities} instance for the specified screen of the specified X connection.
-     *
-     * <p>This method may only be used on Linux.</p>
-     *
-     * @param display the X connection handle ({@code DISPLAY})
-     * @param screen  the screen index
-     */
     public static GLXCapabilities createCapabilitiesGLX(long display, int screen) {
         FunctionProvider functionProvider = GL.functionProvider;
         if (functionProvider == null) {
@@ -744,18 +723,11 @@ public final class GL {
         return checkCapabilities(icd.get());
     }
 
-    /** Function pointer provider. */
     private interface ICD {
         default void set(@Nullable GLCapabilities caps) {}
         @Nullable GLCapabilities get();
     }
 
-    /**
-     * Write-once {@link ICD}.
-     *
-     * <p>This is the default implementation that skips the thread-local lookup. When a new GLCapabilities is set, we compare it to the write-once capabilities.
-     * If different function pointers are found, we fall back to the expensive lookup.</p>
-     */
     private static class ICDStatic implements ICD {
 
         private static @Nullable GLCapabilities tempCaps;
@@ -777,7 +749,6 @@ public final class GL {
         }
 
         private static final class WriteOnce {
-            // This will be initialized the first time get() above is called
             static final GLCapabilities caps;
 
             static {

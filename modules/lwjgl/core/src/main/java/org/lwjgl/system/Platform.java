@@ -26,6 +26,18 @@ public enum Platform {
             return System.mapLibraryName(name);
         }
     },
+    NETBSD("NetBSD", "netbsd") {
+        private final Pattern SO = Pattern.compile("(?:^|/)lib\\w+[.]so(?:[.]\\d+)*$");
+
+        @Override
+        String mapLibraryName(String name) {
+            if (SO.matcher(name).find()) {
+                return name;
+            }
+
+            return System.mapLibraryName(name);
+        }
+    },
     LINUX("Linux", "linux") {
         private final Pattern SO = Pattern.compile("(?:^|/)lib\\w+[.]so(?:[.]\\d+)*$");
 
@@ -138,6 +150,8 @@ public enum Platform {
             current = WINDOWS;
         } else if (osName.startsWith("FreeBSD")) {
             current = FREEBSD;
+        } else if (osName.startsWith("NetBSD")) {
+            current = NETBSD;
         } else if (osName.startsWith("Linux") || osName.startsWith("SunOS") || osName.startsWith("Unix")) {
             current = LINUX;
         } else if (osName.startsWith("Mac OS X") || osName.startsWith("Darwin")) {
