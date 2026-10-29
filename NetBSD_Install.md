@@ -2,7 +2,7 @@
 
 ## Install the dependencies
 ```sh
-pkgin install openjdk17 openjdk8 glfw libffi openal-soft MesaLib apache-ant jemalloc gtk3
+pkgin install openjdk17 openjdk8 openjdk21 glfw libffi openal-soft MesaLib apache-ant jemalloc gtk3
 ```
 
 ## Clone the GitHub repository:
